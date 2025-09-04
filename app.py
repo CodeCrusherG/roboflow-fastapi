@@ -1,60 +1,39 @@
-
-from fastapi import FastAPI, File, UploadFile
-import logging
+# app.py
+from fastapi import FastAPI, UploadFile, File
 import requests
+import uvicorn
 
-# --- Setup Logging ---
-logging.basicConfig(level=logging.INFO)
-
-# --- Initialize FastAPI ---
 app = FastAPI()
 
-# --- Root Endpoint ---
-@app.get("/")
-def root():
-    return {"status": "API is running"}
+# Replace these with your Roboflow model info
+ROBOFLOW_MODEL_NAME = "yellow_leafs-pr0v9/1"   # e.g., "yellow_leafs"
+ROBOFLOW_MODEL_VERSION = "v1"   # e.g., "1"
+ROBOFLOW_API_KEY = "61pbg9qIAf5hCUDgNP06"         # Your Roboflow private API key
 
-# --- Predict Endpoint ---
+ROBofLOW_API_URL = f"https://detect.roboflow.com/{ROBOFLOW_MODEL_NAME}/{ROBOFLOW_MODEL_VERSION}?api_key={ROBOFLOW_API_KEY}"
+
+@app.get("/")
+def home():
+    return {"message": "Roboflow Render API is running"}
+
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
     try:
-        logging.info("🔄 Received /predict request")
+        # Read the uploaded file
+        image_bytes = await file.read()
 
-        # Save uploaded file locally
-        contents = await file.read()
-        file_path = "temp.jpg"
-        with open(file_path, "wb") as f:
-            f.write(contents)
-        logging.info(f"✅ File saved as {file_path}")
+        # Forward the image to Roboflow API
+        response = requests.post(
+            ROBofLOW_API_URL,
+            files={"file": (file.filename, image_bytes, file.content_type)}
+        )
 
-        # Call Roboflow Workflow API
-        ROBFLOW_API_URL = "https://serverless.roboflow.com"
-        API_KEY = "61pbg9qIAf5hCUDgNP06"  # <-- Replace with your actual key
-
-        with open(file_path, "rb") as image_file:
-            response = requests.post(
-                ROBFLOW_API_URL,
-                headers={"Content-Type": "application/json"},
-                json={
-                    "api_key": API_KEY,
-                    "inputs": {
-                        "image": {
-                            "type": "base64",
-                            "value": contents.decode("latin-1")  # send base64-compatible bytes
-                        }
-                    }
-                }
-            )
-
-        if response.status_code != 200:
-            logging.error(f"❌ Roboflow API returned {response.status_code}: {response.text}")
-            return {"error": "Roboflow API call failed", "details": response.text}
-
-        result = response.json()
-        logging.info(f"✅ Prediction result: {result}")
-
-        return {"predictions": result}
+        # Return the JSON response from Roboflow
+        return response.json()
 
     except Exception as e:
-        logging.error(f"❌ Error in /predict: {str(e)}")
-        return {"error": str(e)}
+        return {"error": "Prediction failed", "details": str(e)}
+
+# Optional: run locally with uvicorn
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
