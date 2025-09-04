@@ -1,7 +1,6 @@
-fastapi==0.110.0
-uvicorn==0.25.0
-inference-sdk==0.9.17
+fastapi==0.115.0
+uvicorn==0.30.6
 python-multipart==0.0.9
-requests==2.32.3
-pillow==10.3.0
-numpy==1.26.4
+requests>=2.31.0
+pillow>=10.2.0
+inference-sdk==0.9.17  # Use a version that works with Python 3.11
