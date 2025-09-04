@@ -1,27 +1,60 @@
-from fastapi import FastAPI, UploadFile
-from inference_sdk import InferenceHTTPClient
-import base64
 
+from fastapi import FastAPI, File, UploadFile
+import logging
+import requests
+
+# --- Setup Logging ---
+logging.basicConfig(level=logging.INFO)
+
+# --- Initialize FastAPI ---
 app = FastAPI()
 
-client = InferenceHTTPClient(
-    api_url="https://serverless.roboflow.com",
-    api_key="61pbg9qIAf5hCUDgNP06"  # you can move this to env var later
-)
-
+# --- Root Endpoint ---
 @app.get("/")
-async def root():
+def root():
     return {"status": "API is running"}
 
+# --- Predict Endpoint ---
 @app.post("/predict")
-async def predict(file: UploadFile):
-    image_bytes = await file.read()
-    image_base64 = "data:image/jpeg;base64," + base64.b64encode(image_bytes).decode("utf-8")
-    
-    result = client.run_workflow(
-        workspace_name="xyz-paco8",
-        workflow_id="detect-count-and-visualize",
-        images={"image": image_base64},
-        use_cache=True
-    )
-    return result
+async def predict(file: UploadFile = File(...)):
+    try:
+        logging.info("🔄 Received /predict request")
+
+        # Save uploaded file locally
+        contents = await file.read()
+        file_path = "temp.jpg"
+        with open(file_path, "wb") as f:
+            f.write(contents)
+        logging.info(f"✅ File saved as {file_path}")
+
+        # Call Roboflow Workflow API
+        ROBFLOW_API_URL = "https://serverless.roboflow.com"
+        API_KEY = "61pbg9qIAf5hCUDgNP06"  # <-- Replace with your actual key
+
+        with open(file_path, "rb") as image_file:
+            response = requests.post(
+                ROBFLOW_API_URL,
+                headers={"Content-Type": "application/json"},
+                json={
+                    "api_key": API_KEY,
+                    "inputs": {
+                        "image": {
+                            "type": "base64",
+                            "value": contents.decode("latin-1")  # send base64-compatible bytes
+                        }
+                    }
+                }
+            )
+
+        if response.status_code != 200:
+            logging.error(f"❌ Roboflow API returned {response.status_code}: {response.text}")
+            return {"error": "Roboflow API call failed", "details": response.text}
+
+        result = response.json()
+        logging.info(f"✅ Prediction result: {result}")
+
+        return {"predictions": result}
+
+    except Exception as e:
+        logging.error(f"❌ Error in /predict: {str(e)}")
+        return {"error": str(e)}
