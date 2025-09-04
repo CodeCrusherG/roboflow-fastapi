@@ -1,32 +1,44 @@
 from fastapi import FastAPI, UploadFile, File
 from inference_sdk import InferenceHTTPClient
-import tempfile, shutil
+import shutil
+import os
 
-app = FastAPI()
+# -----------------------------
+# CONFIGURATION
+# -----------------------------
+API_URL = "https://serverless.roboflow.com"
+API_KEY = os.environ.get("61pbg9qIAf5hCUDgNP06")  # use env var
+WORKSPACE_NAME = "xyz-paco8"
+WORKFLOW_ID = "detect-count-and-visualize"
+UPLOAD_DIR = "uploads"
 
-client = InferenceHTTPClient(
-    api_url="https://serverless.roboflow.com",
-    api_key="61pbg9qIAf5hCUDgNP06"
-)
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-@app.get("/")
-def home():
-    return {"message": "Roboflow local API is running"}
+# -----------------------------
+# INITIALIZE CLIENT
+# -----------------------------
+client = InferenceHTTPClient(api_url=API_URL, api_key=API_KEY)
+
+# -----------------------------
+# INITIALIZE FASTAPI
+# -----------------------------
+app = FastAPI(title="Roboflow FastAPI Deployment")
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
-    try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
-            shutil.copyfileobj(file.file, tmp)
-            tmp_path = tmp.name
+    # Save uploaded file
+    file_path = os.path.join(UPLOAD_DIR, file.filename)
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
 
+    # Run workflow
+    try:
         result = client.run_workflow(
-            workspace_name="xyz-paco8",
-            workflow_id="detect-count-and-visualize",
-            images={"image": tmp_path},
+            workspace_name=WORKSPACE_NAME,
+            workflow_id=WORKFLOW_ID,
+            images={"image": file_path},
             use_cache=True
         )
-        return result
-
+        return {"result": result}
     except Exception as e:
         return {"error": str(e)}
