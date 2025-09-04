@@ -1,3 +1,7 @@
 fastapi
-unvicorn
+uvicorn
 inference-sdk
+numpy<2
+python-multipart
+matplotlib
+supervision
